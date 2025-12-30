@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { Octokit } from "octokit";
 import { prisma } from "@/lib/prisma";
 import { createSession } from "@/lib/auth";
+import { getUserInstallations } from "@/lib/github-app";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get("code");
   const state = searchParams.get("state");
-  const storedState = request.cookies.get("github_oauth_state")?.value;
+  const storedState = request.cookies.get("github_app_oauth_state")?.value;
 
   // Verify state parameter for CSRF protection
   if (!state || state !== storedState) {
@@ -17,17 +18,15 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code) {
-    return NextResponse.redirect(
-      new URL("/?error=no_code", request.url)
-    );
+    return NextResponse.redirect(new URL("/?error=no_code", request.url));
   }
 
-  const clientId = process.env.GITHUB_CLIENT_ID;
-  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+  const clientId = process.env.GITHUB_APP_CLIENT_ID;
+  const clientSecret = process.env.GITHUB_APP_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
     return NextResponse.redirect(
-      new URL("/?error=github_not_configured", request.url)
+      new URL("/?error=github_app_not_configured", request.url)
     );
   }
 
@@ -52,7 +51,7 @@ export async function GET(request: NextRequest) {
     const tokenData = await tokenResponse.json();
 
     if (tokenData.error || !tokenData.access_token) {
-      console.error("GitHub OAuth error:", tokenData);
+      console.error("GitHub App OAuth error:", tokenData);
       return NextResponse.redirect(
         new URL("/?error=token_exchange_failed", request.url)
       );
@@ -65,8 +64,13 @@ export async function GET(request: NextRequest) {
     const { data: githubUser } = await octokit.rest.users.getAuthenticated();
 
     // Get user's primary email
-    const { data: emails } = await octokit.rest.users.listEmailsForAuthenticatedUser();
+    const { data: emails } =
+      await octokit.rest.users.listEmailsForAuthenticatedUser();
     const primaryEmail = emails.find((email) => email.primary)?.email;
+
+    // Get user's GitHub App installations
+    const installations = await getUserInstallations(accessToken);
+    const firstInstallationId = installations[0]?.id || null;
 
     // Find or create user in database
     let user = await prisma.user.findUnique({
@@ -82,6 +86,9 @@ export async function GET(request: NextRequest) {
           githubAccessToken: accessToken,
           githubAvatarUrl: githubUser.avatar_url,
           email: primaryEmail || null,
+          githubAppInstallationId: firstInstallationId
+            ? String(firstInstallationId)
+            : null,
         },
       });
     } else {
@@ -93,6 +100,9 @@ export async function GET(request: NextRequest) {
           githubUsername: githubUser.login,
           githubAvatarUrl: githubUser.avatar_url,
           email: primaryEmail || user.email,
+          githubAppInstallationId: firstInstallationId
+            ? String(firstInstallationId)
+            : null,
         },
       });
     }
@@ -106,11 +116,11 @@ export async function GET(request: NextRequest) {
 
     // Clear state cookie and redirect to home
     const response = NextResponse.redirect(new URL("/", request.url));
-    response.cookies.delete("github_oauth_state");
+    response.cookies.delete("github_app_oauth_state");
 
     return response;
   } catch (error) {
-    console.error("GitHub OAuth callback error:", error);
+    console.error("GitHub App OAuth callback error:", error);
     return NextResponse.redirect(
       new URL("/?error=authentication_failed", request.url)
     );

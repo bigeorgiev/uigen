@@ -13,10 +13,12 @@ import { Github, GitBranch, Upload, Download, Link2, Unlink } from "lucide-react
 import {
   createAndLinkRepository,
   linkExistingRepository,
-  pushToGitHub,
-  pullFromGitHub,
   unlinkRepository,
 } from "@/actions/github";
+import {
+  pushToGitHubApp,
+  pullFromGitHubApp,
+} from "@/actions/github-app";
 import { useRouter } from "next/navigation";
 
 interface GitHubSyncProps {
@@ -94,7 +96,7 @@ export function GitHubSync({
     setIsLoading(true);
     setError("");
 
-    const result = await pushToGitHub(projectId);
+    const result = await pushToGitHubApp(projectId);
 
     if (result.success) {
       router.refresh();
@@ -109,7 +111,7 @@ export function GitHubSync({
     setIsLoading(true);
     setError("");
 
-    const result = await pullFromGitHub(projectId);
+    const result = await pullFromGitHubApp(projectId);
 
     if (result.success) {
       router.refresh();
@@ -145,16 +147,18 @@ export function GitHubSync({
 
   if (!hasGitHubAccount) {
     return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          window.location.href = "/api/auth/github";
-        }}
-      >
-        <Github className="mr-2 h-4 w-4" />
-        Connect GitHub
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            window.location.href = "/api/auth/github-app";
+          }}
+        >
+          <Github className="mr-2 h-4 w-4" />
+          Install GitHub App
+        </Button>
+      </div>
     );
   }
 

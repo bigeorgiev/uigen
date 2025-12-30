@@ -81,12 +81,12 @@ export function SignInForm({ onSuccess }: SignInFormProps) {
         variant="outline"
         className="w-full"
         onClick={() => {
-          window.location.href = "/api/auth/github";
+          window.location.href = "/api/auth/github-app";
         }}
         disabled={isLoading}
       >
         <Github className="mr-2 h-4 w-4" />
-        Sign in with GitHub
+        Sign in with GitHub App
       </Button>
     </form>
   );

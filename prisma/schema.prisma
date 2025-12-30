@@ -22,6 +22,9 @@ model User {
   githubAccessToken String?
   githubAvatarUrl   String?
 
+  // GitHub App installation
+  githubAppInstallationId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
