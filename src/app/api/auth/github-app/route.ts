@@ -14,16 +14,17 @@ export async function GET(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const redirectUri = `${origin}/api/auth/github-app/callback`;
 
+  // Generate state parameter for CSRF protection
+  const state = crypto.randomUUID();
+
   // Build GitHub App authorization URL
   const githubAuthUrl = new URL("https://github.com/login/oauth/authorize");
   githubAuthUrl.searchParams.set("client_id", clientId);
   githubAuthUrl.searchParams.set("redirect_uri", redirectUri);
   githubAuthUrl.searchParams.set("scope", "user:email");
+  githubAuthUrl.searchParams.set("state", state);
 
-  // Generate and store state parameter for CSRF protection
-  const state = crypto.randomUUID();
-
-  // Store state in cookie (will be verified in callback)
+  // Create redirect response and store state in cookie
   const response = NextResponse.redirect(githubAuthUrl.toString());
   response.cookies.set("github_app_oauth_state", state, {
     httpOnly: true,
@@ -33,7 +34,5 @@ export async function GET(request: NextRequest) {
     path: "/",
   });
 
-  githubAuthUrl.searchParams.set("state", state);
-
-  return NextResponse.redirect(githubAuthUrl.toString());
+  return response;
 }

@@ -1,0 +1,65 @@
+name: Claude Code PR
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  claude-code:
+    if: |
+      github.event.issue.pull_request &&
+      (startsWith(github.event.comment.body, '/claude') ||
+       startsWith(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run Claude Code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Extract the command from the comment (remove /claude or @claude prefix)
+          COMMAND="${{ github.event.comment.body }}"
+          COMMAND=$(echo "$COMMAND" | sed 's|^/claude ||' | sed 's|^@claude ||')
+
+          # Install Claude Code CLI
+          curl -fsSL https://claude.ai/install.sh | bash
+          export PATH="$HOME/.local/bin:$PATH"
+
+          # Run Claude Code with the command
+          claude "$COMMAND"
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "Claude Code"
+          git config --global user.email "noreply@anthropic.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Claude Code: ${{ github.event.comment.body }}"
+            git push origin HEAD:refs/pull/${{ github.event.issue.number }}/head
+          fi
