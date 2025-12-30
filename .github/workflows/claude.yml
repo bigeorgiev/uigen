@@ -1,4 +1,4 @@
-name: Claude Code PR
+name: Claude Code
 
 on:
   issue_comment:
@@ -12,16 +12,15 @@ permissions:
 jobs:
   claude-code:
     if: |
-      github.event.issue.pull_request &&
-      (startsWith(github.event.comment.body, '/claude') ||
-       startsWith(github.event.comment.body, '@claude'))
+      startsWith(github.event.comment.body, '/claude') ||
+      startsWith(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout PR
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: refs/pull/${{ github.event.issue.number }}/head
+          ref: ${{ github.event.issue.pull_request && format('refs/pull/{0}/head', github.event.issue.number) || github.event.repository.default_branch }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -85,6 +84,8 @@ jobs:
           claude "$COMMAND" --custom-instructions "$CUSTOM_INSTRUCTIONS" --allowed-tools "$ALLOWED_TOOLS"
 
       - name: Commit and push changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "Claude Code"
           git config --global user.email "noreply@anthropic.com"
@@ -93,5 +94,23 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Claude Code: ${{ github.event.comment.body }}"
-            git push origin HEAD:refs/pull/${{ github.event.issue.number }}/head
+
+            # If this is a PR, push to the PR branch
+            if [ -n "${{ github.event.issue.pull_request }}" ]; then
+              git push origin HEAD:refs/pull/${{ github.event.issue.number }}/head
+            else
+              # For issues, create a new branch and PR
+              BRANCH_NAME="claude-issue-${{ github.event.issue.number }}-$(date +%s)"
+              git checkout -b "$BRANCH_NAME"
+              git push origin "$BRANCH_NAME"
+
+              # Create PR using gh CLI
+              gh pr create --title "Claude Code: Fix for issue #${{ github.event.issue.number }}" \
+                --body "Automated changes by Claude Code in response to issue #${{ github.event.issue.number }}" \
+                --base ${{ github.event.repository.default_branch }}
+
+              # Comment on the issue with PR link
+              PR_URL=$(gh pr view --json url -q .url)
+              gh issue comment ${{ github.event.issue.number }} --body "Created PR: $PR_URL"
+            fi
           fi
